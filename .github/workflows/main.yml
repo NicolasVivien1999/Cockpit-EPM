@@ -1,0 +1,42 @@
+name: Rafraîchissement hebdomadaire du cockpit
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"        # chaque lundi à 05h17 UTC (~06h17/07h17 Paris)
+  workflow_dispatch:             # + déclenchement manuel (onglet Actions)
+
+permissions:
+  contents: write                # nécessaire pour committer le JSON
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Dépendances
+        run: pip install -r requirements.txt
+
+      - name: Collecte open data
+        env:
+          PAPPERS_TOKEN: ${{ secrets.PAPPERS_TOKEN }}   # optionnel — vide si non défini
+        run: python pipeline_opendata.py
+
+      - name: Committer le JSON s'il a changé
+        run: |
+          git config user.name  "cockpit-bot"
+          git config user.email "cockpit-bot@users.noreply.github.com"
+          git add docs/cockpit_data_v2.json
+          if git diff --cached --quiet; then
+            echo "Aucun changement — rien à committer."
+          else
+            git commit -m "Rafraîchissement hebdomadaire ($(date -u +%F))"
+            git push
+          fi
